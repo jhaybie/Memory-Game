@@ -23,7 +23,7 @@
 
 -(void) touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    [self.delegate didChooseView:self];
+    [self.delegate didChooseView: self];
 }
 
 @end

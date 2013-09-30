@@ -2,8 +2,8 @@
 //  ViewController.m
 //  ViewandTouches
 //
-//  Created by Sviatoslav Lytovka on 9/26/13.
-//  Copyright (c) 2013 Lytovka. All rights reserved.
+//  Created by Jhaybie Basco on 9/26/13.
+//  Copyright (c) 2013 Basco. All rights reserved.
 //
 
 #import "ViewController.h"
@@ -12,22 +12,26 @@
 
 @interface ViewController ()
 
-@property (weak, nonatomic) IBOutlet UILabel *timeElapsedLabel;
-@property (weak, nonatomic) IBOutlet UILabel *playerScoreLabel;
-@property (weak, nonatomic) IBOutlet UILabel *highScoreLabel;
-@property (weak, nonatomic) IBOutlet UILabel *totalGamesPlayedLabel;
-@property (weak, nonatomic) IBOutlet UIButton *resetButton;
-@property (weak, nonatomic) IBOutlet UIButton *startButton;
+@property (weak, nonatomic) IBOutlet UIImageView *checkMark;
+@property (weak, nonatomic) IBOutlet UIImageView *xMark;
+@property (weak, nonatomic) IBOutlet UILabel     *timeRemainingLabel;
+@property (weak, nonatomic) IBOutlet UILabel     *playerScoreLabel;
+@property (weak, nonatomic) IBOutlet UILabel     *highScoreLabel;
+@property (weak, nonatomic) IBOutlet UILabel     *totalGamesPlayedLabel;
+@property (weak, nonatomic) IBOutlet UIButton    *resetButton;
+@property (weak, nonatomic) IBOutlet UIButton    *startButton;
 
 @end
 
 @implementation ViewController
-@synthesize highScoreLabel,
+@synthesize checkMark,
+            highScoreLabel,
             playerScoreLabel,
             resetButton,
             startButton,
-            timeElapsedLabel,
-            totalGamesPlayedLabel;
+            timeRemainingLabel,
+            totalGamesPlayedLabel,
+            xMark;
 
 MyView         *firstCard;
 MyView         *secondCard;
@@ -35,48 +39,69 @@ MyView         *tempView;
 int            highScore,
                matchCount,
                missCount,
-               playerScore,
-               timeElapsed,
+               timeRemaining,
                totalCards,
                totalCardsOpen,
                totalGamesPlayed;
+float          playerScore;
 BOOL           isFirstMove;
-NSMutableArray *colorArray;
+NSMutableArray *cardArray, *colorArray, *tagArray;
 NSTimer        *gameTimer;
 
 
 
-- (IBAction)resetPressed: (id)sender
+-(void) compareCards
 {
-    UIAlertView *message = [[UIAlertView alloc] initWithTitle: @"Game Cancelled"
-                                                      message: nil
-                                                     delegate: self
-                                            cancelButtonTitle: @"Ok"
-                                            otherButtonTitles: nil];
-    [message show];
-    [gameTimer invalidate];
-    [self resetGame];
-}
-
-
-- (void) updateGameTimer: (NSTimer *) timer
-{
-    timeElapsed++;
-    int minutes           = (timeElapsed % 3600) / 60;
-    int seconds           = (timeElapsed % 3600) % 60;
-    timeElapsedLabel.text = [NSString stringWithFormat: @"%02d:%02d", minutes, seconds];
-}
-
-
-- (void) updateScore
-{
-    playerScore = (matchCount - missCount) * (1 / timeElapsed) * 10000;
-    playerScoreLabel.text = [NSString stringWithFormat: @"Score %i", playerScore];
-    if (playerScore >= highScore)
+    [self revealCard: secondCard];
+    if (firstCard.tag == secondCard.tag)
     {
-        highScore = playerScore;
-        highScoreLabel.text = [NSString stringWithFormat: @"%i", highScore];
+        totalCardsOpen+=2;
+        isFirstMove=YES;
+        if (totalCardsOpen == totalCards)
+            [self tellPlayerGameOver];
+        else  // totalCardsOpen < totalCards
+            [self tellPlayerCardMatch];
     }
+    else  // firstCard != secondCard
+    {
+        isFirstMove=YES;
+        [self revealCard: secondCard];
+        [self tellPlayerCardMisMatch];
+        [self performSelector: @selector(hideCard:)
+                   withObject: firstCard
+                   afterDelay: 0.25];
+        [self performSelector: @selector(hideCard:)
+                   withObject: secondCard
+                   afterDelay: 0.25];
+    }
+}
+
+
+-(void) resetGame
+{
+    [self generateCardColors: totalCards];
+    isFirstMove = YES;
+    matchCount = 0;
+    missCount = 0;
+    playerScore = 0;
+    timeRemaining = 60;
+    timeRemainingLabel.text = @"01:00";
+    totalCardsOpen = 0;
+    [resetButton setEnabled: NO];
+    [startButton setTitle: @"Start"
+                 forState: UIControlStateNormal];
+    [self generateCards];
+    /*for (MyView* view in self.view.subviews)
+    {
+        if ([view isKindOfClass: [MyView class]])
+        {
+            MyView* myview = (MyView*)view;
+            myview.backgroundColor = [UIColor lightGrayColor];
+            myview.isOpen = NO;
+            myview.isPaired = NO;
+            myview.delegate = self;
+        }
+    }*/
 }
 
 
@@ -95,9 +120,11 @@ NSTimer        *gameTimer;
     }
 }
 
+
 - (void) resumeGame  //Reveals face-up cards when game is resumed
 {
-    [startButton setTitle: @"Pause" forState: UIControlStateNormal];
+    [startButton setTitle: @"Pause"
+                 forState: UIControlStateNormal];
     gameTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0f
                                                  target: self
                                                selector: @selector(updateGameTimer:)
@@ -116,27 +143,73 @@ NSTimer        *gameTimer;
 }
 
 
-- (IBAction)startPressed: (id)sender
+- (void) updateGameTimer: (NSTimer *)timer
 {
-    if ([startButton.titleLabel.text isEqual: @"Start"])
+    timeRemaining--;
+    if (timeRemaining >= 0)
     {
-        timeElapsed = 0;
-        playerScore = 0;
-        [resetButton setEnabled: YES];
-        [startButton setTitle: @"Pause" forState: UIControlStateNormal];
-        gameTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0f
-                                                     target: self
-                                                   selector: @selector(updateGameTimer:)
-                                                   userInfo: nil
-                                                    repeats: YES];
+        int minutes           = (timeRemaining % 3600) / 60;
+        int seconds           = (timeRemaining % 3600) % 60;
+        timeRemainingLabel.text = [NSString stringWithFormat: @"%02d:%02d", minutes, seconds];
     }
-    else  // Player pauses the game
+    else
+        [self tellPlayerTimeIsUp];
+}
+
+
+- (void) updateScore  // Score is calculated after game is over
+{
+    float floatTimeRemaining = timeRemaining;
+    playerScore = (matchCount * 20 - missCount) * floatTimeRemaining;
+    playerScoreLabel.text = [NSString stringWithFormat: @"%0.0f", playerScore];
+    if (playerScore >= highScore)
     {
-        if ([startButton.titleLabel.text isEqual: @"Pause"])
-            [self pauseGame];
-        else  // Player resumes game
-            [self resumeGame];
+        // Insert method call tellPlayerHighScore
+        highScore = playerScore;
+        highScoreLabel.text = [NSString stringWithFormat: @"%i", highScore];
     }
+}
+
+- (void) drawCards
+{
+    int x = 0;
+    int y = 0;
+    int a = 0;
+    for (y = 260; y < 465; y += 68)
+    {
+        for (x = 28; x < 233; x += 68)
+        {
+            MyView *card = [[MyView alloc] initWithFrame: CGRectMake(x, y, 60, 60)];
+            card.tag = (int)tagArray[a];
+            card.backgroundColor = [UIColor lightGrayColor];
+            card.isOpen = NO;
+            card.isPaired = NO;
+            card.delegate = self;
+            [self.view addSubview: card];
+            a++;
+        }
+    }
+}
+
+
+- (void) generateCards
+{
+    int x = 0;
+    for (int i = 0; i < totalCards; i += 2)
+    {
+        tagArray[i]     = [NSNumber numberWithInt: x];
+        tagArray[i + 1] = [NSNumber numberWithInt: x];
+        x++;
+    }
+    NSUInteger count = [tagArray count];
+    for (NSUInteger i = 0; i < count; ++i)
+    {
+        NSInteger nElements = count - i;
+        NSInteger n = (arc4random() % nElements) + i;
+        [tagArray exchangeObjectAtIndex: i
+                      withObjectAtIndex: n];
+    }
+    [self drawCards];
 }
 
 
@@ -163,44 +236,6 @@ NSTimer        *gameTimer;
                                                   alpha: 1.0f];
         colorArray[index] = generatedColor;
     }
-    return;
-}
-
-
-- (void) shuffleCards
-{
-    // Insert randomization routine here
-}
-
-
--(void) resetGame
-{
-    [gameTimer invalidate];
-    
-    [self generateCardColors: totalCards];
-
-    
-    isFirstMove = YES;
-    matchCount = 0;
-    missCount = 0;
-    playerScore = 0;
-    //playerScoreLabel.text = @"0";
-    timeElapsed = 0;
-    
-    totalCardsOpen = 0;
-    [resetButton setEnabled: NO];
-    [startButton setTitle: @"Start" forState: UIControlStateNormal];
-    for (MyView* view in self.view.subviews)
-    {
-        if ([view isKindOfClass: [MyView class]])
-        {
-            MyView* myview = (MyView*)view;
-            myview.backgroundColor = [UIColor lightGrayColor];
-            myview.isOpen = NO;
-            myview.isPaired = NO;
-            myview.delegate = self;
-        }
-    }
 }
 
 
@@ -218,19 +253,31 @@ NSTimer        *gameTimer;
 }
 
 
+-(void) hideCheck
+{
+    checkMark.hidden=YES;
+}
+
+
 - (void) tellPlayerCardMatch
 {
     matchCount++;
-    // Replace with animated .png UIAnimation
-    NSLog(@"Match!");
+    checkMark.hidden = NO;
+    [self performSelector:@selector(hideCheck) withObject:nil afterDelay:0.25f];
 }
 
 
 - (void) tellPlayerCardMisMatch
 {
     missCount++;
-    // Replace with animated .png UIAnimation
-    NSLog(@"Miss!");
+    xMark.hidden=NO;
+    [self performSelector:@selector(hideX) withObject:nil afterDelay:0.25];
+}
+
+
+- (void) hideX
+{
+    xMark.hidden = YES;
 }
 
 
@@ -238,44 +285,70 @@ NSTimer        *gameTimer;
 {
     // Replace with animated .png UIAnimation
     UIAlertView *message = [[UIAlertView alloc] initWithTitle: @"Game Over"
+                                                      message: @"Good job!"
+                                                     delegate: self
+                                            cancelButtonTitle: @"Ok"
+                                            otherButtonTitles: nil];
+    [message show];
+    [gameTimer invalidate];
+    [self updateScore];
+    [resetButton setEnabled: NO];
+    [startButton setTitle: @"Start" forState: UIControlStateNormal];
+    totalGamesPlayed++;
+    totalGamesPlayedLabel.text = [NSString stringWithFormat: @"%i", totalGamesPlayed];
+}
+
+
+- (void) tellPlayerTimeIsUp
+{
+    UIAlertView *message = [[UIAlertView alloc] initWithTitle: @"Game Over"
+                                                      message: @"You suck!"
+                                                     delegate: self
+                                            cancelButtonTitle: @"Ok"
+                                            otherButtonTitles: nil];
+    [message show];
+    [gameTimer invalidate];
+    [startButton setTitle: @"Start" forState: UIControlStateNormal];
+    totalGamesPlayed++;
+    totalGamesPlayedLabel.text = [NSString stringWithFormat: @"%i", totalGamesPlayed];
+}
+
+
+- (IBAction)resetPressed: (id)sender
+{
+    UIAlertView *message = [[UIAlertView alloc] initWithTitle: @"Game Cancelled"
                                                       message: nil
                                                      delegate: self
                                             cancelButtonTitle: @"Ok"
                                             otherButtonTitles: nil];
     [message show];
-    
-    [self updateScore];
-    totalGamesPlayed ++;
-    totalGamesPlayedLabel.text = [NSString stringWithFormat: @"%i", totalGamesPlayed];
+    [gameTimer invalidate];
+    timeRemaining = 60;
+    [self resetGame];
 }
 
 
--(void) compareCards
+- (IBAction) startPressed: (id)sender
 {
-    
-        [self revealCard: secondCard];
-        if (firstCard.tag == secondCard.tag)
-        {
-            totalCardsOpen+=2;
-            if (totalCardsOpen == totalCards)
-            {
-                [self hideCard: firstCard];
-                [self hideCard: secondCard];
-                [self tellPlayerGameOver];
-                [self resetGame];
-            }
-            else  // totalCardsOpen < totalCards
-            {
-                [self tellPlayerCardMatch];
-            }
-            isFirstMove=YES;
-        } else  // firstCard != secondCard
-        {
-            isFirstMove=YES;
-            [self tellPlayerCardMisMatch];
-            [self hideCard: firstCard];
-            [self hideCard: secondCard];
-        }
+    if ([startButton.titleLabel.text isEqual: @"Start"])
+    {
+        [self resetGame];
+        [resetButton setEnabled: YES];
+        [startButton setTitle: @"Pause"
+                     forState: UIControlStateNormal];
+        gameTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0f
+                                                     target: self
+                                                   selector: @selector(updateGameTimer:)
+                                                   userInfo: nil
+                                                    repeats: YES];
+    }
+    else  // Player pauses the game
+    {
+        if ([startButton.titleLabel.text isEqual: @"Pause"])
+            [self pauseGame];
+        else  // Player resumes game
+            [self resumeGame];
+    }
 }
 
 
@@ -301,17 +374,21 @@ NSTimer        *gameTimer;
 }
 
 
-- (void)viewDidLoad
+- (void) viewDidLoad
 {
     [super viewDidLoad];
+    totalCards = 16;
+    tagArray = [[NSMutableArray alloc] init];
     colorArray = [[NSMutableArray alloc] init];
     gameTimer = [[NSTimer alloc] init];
-    highScoreLabel.text = @"0";
     tempView = [[MyView alloc] init];
+    
+    highScoreLabel.text = @"0";  // Can be pulled from a file storing highscores from previous games
     totalGamesPlayed = 0;
     totalGamesPlayedLabel.text = @"0";
      
     // Later updates can allow the player to select the difficulty and increase or decrease this number
+    // as well as increase or decrease the timer.
     totalCards = 16;
     
     [self resetGame];

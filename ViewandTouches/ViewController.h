@@ -9,7 +9,9 @@
 #import <UIKit/UIKit.h>
 #import "MyView.h"
 
-@interface ViewController : UIViewController <MatchDelegate, UIAlertViewDelegate, UIActionSheetDelegate>
+@interface ViewController : UIViewController <MatchDelegate,
+                                              UIAlertViewDelegate,
+                                              UIActionSheetDelegate>
 
 - (void) updateGameTimer: (NSTimer *) timer;
 

@@ -10,7 +10,7 @@
 @class MyView;
 
 @protocol MatchDelegate <NSObject>
--(void) didChooseView:(MyView*) view;
+- (void) didChooseView:(MyView*) view;
 @end
 
 @interface MyView : UIView

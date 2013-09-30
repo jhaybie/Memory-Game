@@ -7,9 +7,9 @@
 //
 
 #import <Foundation/Foundation.h>
-#import "MyView.h>
+#import "MyView.h"
 
 @protocol MatchDelegate <NSObject>
--(void) didChooseView:(MyView*) view;
+-(void) didChooseView: (MyView*) view;
 
 @end
